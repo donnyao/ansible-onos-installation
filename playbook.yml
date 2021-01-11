@@ -1,0 +1,71 @@
+---
+- hosts: onos-controllers
+  become: true
+  vars_files:
+    - vars/default.yml
+
+  tasks:   
+    - name: Add the user 'sdn' with a specific uid and a primary group of 'admin'
+      user:
+        name: "{{ user }}"
+        comment: user for onos
+        state: present
+        system: yes
+
+    - name: Add apt repository java 11
+      apt_repository:
+        repo: ppa:openjdk-r/ppa
+        
+    - name: Check if packages are installed
+      shell: dpkg-query -W -f='${Status}' {{ packages }} | grep 'install ok installed'
+      register: app_installed
+      failed_when: no
+      changed_when: no
+      
+    - name: Install git, zip, curl, unzip, python-minimal, openjdk-11-jdk
+      apt: name="{{ item }}" state=latest update_cache=yes
+      loop: "{{ packages }}"
+      when: app_installed.rc == 0
+
+    - name: Download and extract package ONOS-2.4.0
+      unarchive:
+        src: "https://repo1.maven.org/maven2/org/onosproject/onos-releases/{{ version }}/onos-{{ version }}.tar.gz"
+        dest: "/home"
+        owner: "{{ user }}"
+        group: "{{ user }}"
+        mode: 0755 
+        remote_src: yes
+
+    - name: Copy file to ONOS directory
+      command: cp /home/onos-{{ version }} /opt/onos
+        mode: 0755
+
+    - name: Copy startup options onos
+      template:
+        src: "files/options.j2"
+        dest: "/opt/onos/options"
+        owner: "{{ user }}"
+        group: "{{ user }}"
+
+    - name: Copy onos.initd
+      copy:
+        src: "/opt/onos/init/onos.initd"
+        dest: "/etc/init.d/onos"
+        mode: 0755
+        remote_src: yes
+
+    - name: Copy onos.service
+      copy:
+        src: "/opt/onos/init/onos.service"
+        dest: "/etc/systemd/system/"
+        remote_src: yes
+        mode: 0755
+      notify: start onos
+
+  handlers:
+    - name: start onos
+      service:
+        name: onos
+        enabled: yes
+        state: started
+        daemon_reload: yes
