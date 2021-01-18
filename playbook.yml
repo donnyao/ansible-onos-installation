@@ -22,12 +22,12 @@
       failed_when: no
       changed_when: no
       
-    - name: Install git, zip, curl, unzip, python-minimal, openjdk-11-jdk
+    - name: Install {{ item }}
       apt: name="{{ item }}" state=latest update_cache=yes
       loop: "{{ packages }}"
       when: app_installed.rc == 0
 
-    - name: Download and extract package ONOS-2.4.0
+    - name: Download and extract package ONOS-{{ version }}
       unarchive:
         src: "https://repo1.maven.org/maven2/org/onosproject/onos-releases/{{ version }}/onos-{{ version }}.tar.gz"
         dest: "/home"
@@ -37,9 +37,13 @@
         remote_src: yes
 
     - name: Copy file to ONOS directory
-      command: cp /home/onos-{{ version }} /opt/onos
-        mode: 0755
-
+      copy:
+        src: /home/onos-{{ version }}
+        dst: /opt/onos
+        owner: "{{ user }}"
+        group: "{{ user }}"
+        mode: 0755 
+        
     - name: Copy startup options onos
       template:
         src: "files/options.j2"
